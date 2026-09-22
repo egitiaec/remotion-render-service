@@ -5,9 +5,9 @@ services:
     expose:
       - "4000"
     environment:
-      - PORT=4000
-      - RENDER_CONCURRENCY=1
-      - PUBLIC_BASE_URL=https://render.hispanamur.digital
+      - PORT=${PORT:-4000}
+      - RENDER_CONCURRENCY=${RENDER_CONCURRENCY:-1}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL}
       - API_TOKEN=${API_TOKEN}
     volumes:
       - remotion-output:/app/output
