@@ -17,6 +17,18 @@ const API_TOKEN = process.env.API_TOKEN || null;
 
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
+const ASSETS_DIR = path.join(OUTPUT_DIR, 'assets');
+fs.mkdirSync(ASSETS_DIR, { recursive: true });
+
+const EXTENSION_BY_MIMETYPE = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+};
+
 /** @type {Map<string, {id:string, status:string, outputFile?:string, error?:string, createdAt:number, inputProps:any}>} */
 const jobs = new Map();
 const queue = [];
@@ -166,6 +178,50 @@ app.get('/render/:id/download', requireAuth, (req, res) => {
     return res.status(404).json({ error: 'No disponible' });
   }
   res.sendFile(job.outputFile);
+});
+
+/**
+ * POST /assets
+ * Sube un archivo en base64 (imagen o audio) y devuelve una URL pública
+ * para usarlo luego como imageUrl/audioUrl en POST /render.
+ * body: { data: "<base64 sin prefijo data:>", mimetype: "image/png" | "audio/mpeg" | ... }
+ */
+app.post('/assets', requireAuth, (req, res) => {
+  const { data, mimetype } = req.body || {};
+
+  if (!data) {
+    return res.status(400).json({ error: 'data (base64) es requerido' });
+  }
+  const extension = EXTENSION_BY_MIMETYPE[mimetype];
+  if (!extension) {
+    return res.status(400).json({
+      error: `mimetype no soportado: ${mimetype}`,
+      soportados: Object.keys(EXTENSION_BY_MIMETYPE),
+    });
+  }
+
+  try {
+    const id = randomUUID();
+    const fileName = `${id}.${extension}`;
+    const filePath = path.join(ASSETS_DIR, fileName);
+    fs.writeFileSync(filePath, Buffer.from(data, 'base64'));
+
+    res.status(201).json({
+      assetId: id,
+      url: `${PUBLIC_BASE_URL}/assets/${fileName}`,
+    });
+  } catch (err) {
+    res.status(500).json({ error: `No se pudo guardar el asset: ${err.message}` });
+  }
+});
+
+/** GET /assets/:fileName — sirve un asset previamente subido */
+app.get('/assets/:fileName', (req, res) => {
+  const filePath = path.join(ASSETS_DIR, req.params.fileName);
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'Asset no encontrado' });
+  }
+  res.sendFile(filePath);
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
